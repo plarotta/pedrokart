@@ -112,6 +112,22 @@ fly deploy && fly scale count 1
 Anyone opens your URL and clicks **Host**; phones scan the QR or type the code. Rooms live in memory, so
 run exactly one machine until rooms are routed across instances.
 
+## CI/CD
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR:
+
+- **test**
+  - syntax-checks every file (`npm run lint`)
+  - validates every track (`npm run check-maps`)
+  - runs an end-to-end smoke test in headless Chromium (`npm test`). It starts the server, opens a game
+    screen and a phone, joins a room, races, fires every item, loads every map, probes the security
+    fixes, and turns the recording into a training set.
+- **docker**: builds the image and hits it over HTTP.
+- **deploy**: ships `main` to Fly.io once both pass. It's inert until you add a `FLY_API_TOKEN` repo
+  secret (`fly tokens create deploy`).
+
+Weak machine or no GPU? Open the game screen with `/host?quality=low`: no shadows, half resolution.
+
 ## Security
 
 **What's handled**

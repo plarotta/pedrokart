@@ -1,0 +1,68 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Syntax check
+        run: npm run lint
+      - name: Validate tracks
+        run: npm run check-maps
+      - uses: astral-sh/setup-uv@v6
+      - name: Install headless Chromium
+        run: npx playwright install --with-deps chromium
+      - name: End-to-end smoke test
+        run: npm test
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t pedrokart .
+      - name: Run it and hit the endpoints
+        run: |
+          docker run -d --name pk -p 8080:8080 -e PUBLIC_URL=http://localhost:8080 pedrokart
+          for i in $(seq 30); do curl -fs localhost:8080/info.json && break; sleep 1; done
+          curl -fs localhost:8080/host > /dev/null
+          curl -fs localhost:8080/maps.json
+          docker logs pk
+
+  # Deploys main to Fly.io once both jobs pass. Inactive until the FLY_API_TOKEN secret exists
+  # (fly tokens create deploy → GitHub repo → Settings → Secrets and variables → Actions).
+  deploy:
+    needs: [test, docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skip when not configured
+        if: env.FLY_API_TOKEN == ''
+        run: echo "::notice::FLY_API_TOKEN is not set, skipping deploy"
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        if: env.FLY_API_TOKEN != ''
+      - name: Deploy
+        if: env.FLY_API_TOKEN != ''
+        run: flyctl deploy --remote-only

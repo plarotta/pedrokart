@@ -2,7 +2,10 @@
   "name": "pedrokart",
   "version": "1.0.0",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node tools/ci-smoke.mjs",
+    "lint": "for f in server.js public/*.js public/maps/*.js tools/*.mjs; do node --check \"$f\" || exit 1; done",
+    "check-maps": "for f in public/maps/*.js; do node tools/check-map.mjs \"$f\" > /dev/null || { node tools/check-map.mjs \"$f\"; exit 1; }; done && echo all tracks OK"
   },
   "type": "module",
   "private": true,

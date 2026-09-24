@@ -15,11 +15,13 @@ const fmtTime = (s) => { const m = Math.floor(s / 60); return `${m}:${(s - m * 6
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // ================================================================ renderer
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+// ?quality=low for weak machines (and CI's software renderer): no shadows, no antialiasing, half resolution.
+const LOW = new URLSearchParams(location.search).get('quality') === 'low';
+const renderer = new THREE.WebGLRenderer({ antialias: !LOW, powerPreference: 'high-performance' });
+renderer.setPixelRatio(LOW ? 0.5 : Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = !LOW;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 document.getElementById('game').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
@@ -1147,7 +1149,8 @@ function frame(now = performance.now()) {
   const dt = Math.min((now - lastT) / 1000, 0.1);
   lastT = now;
   acc += dt;
-  for (let n = 0; acc >= STEP && n < 6; n++) { tick(); acc -= STEP; }
+  // Catch up on missed ticks (up to 0.2 s per frame) so slow frames don't turn into slow motion.
+  for (let n = 0; acc >= STEP && n < 12; n++) { tick(); acc -= STEP; }
   acc = Math.min(acc, STEP);
   animate(dt);
   drawMinimap();

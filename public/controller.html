@@ -109,6 +109,7 @@ if (!id) { id = Math.random().toString(36).slice(2, 12); store.set('pk_id', id);
 $('#name').value = store.get('pk_name') || '';
 
 const state = { gas: 0, brake: 0, drift: 0, item: 0 };
+const tapped = { gas: 0, brake: 0, drift: 0, item: 0 }; // pressed since the last send: a quick tap is never lost
 let mode = store.get('pk_mode') || 'tilt';     // 'tilt' | 'touch'
 let invert = store.get('pk_inv') === '1';
 let tilt = null, neutral = null;               // radians, gravity angle in the screen plane
@@ -142,7 +143,7 @@ function steerValue() {
 document.querySelectorAll('[data-k]').forEach((btn) => {
   const k = btn.dataset.k;
   const held = new Set();
-  btn.addEventListener('pointerdown', (e) => { e.preventDefault(); held.add(e.pointerId); state[k] = 1; btn.classList.add('on'); });
+  btn.addEventListener('pointerdown', (e) => { e.preventDefault(); held.add(e.pointerId); state[k] = tapped[k] = 1; btn.classList.add('on'); });
   const off = (e) => { held.delete(e.pointerId); if (!held.size) { state[k] = 0; btn.classList.remove('on'); } };
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) btn.addEventListener(ev, off);
 });
@@ -299,13 +300,15 @@ setInterval(() => {
   const s = steerValue();
   $('#wheel').style.transform = `rotate(${s * 90}deg)`;
   if (!hostUp) return;
-  const gas = state.gas || (mode === 'touch' && !state.brake) ? 1 : 0;
-  const body = JSON.stringify([Math.round(s * 1000) / 1000, gas, state.brake, state.drift, state.item]);
+  const on = (k) => (state[k] || tapped[k] ? 1 : 0);
+  const gas = on('gas') || (mode === 'touch' && !state.brake) ? 1 : 0;
+  const body = JSON.stringify([Math.round(s * 1000) / 1000, gas, on('brake'), on('drift'), on('item')]);
   const now = performance.now();
   // Send on change, and at least every 100 ms. `q` lets the host drop packets that arrive out of order.
   if (body !== last || now - lastSent > 100) {
-    send({ t: 'in', q: ++seq, s: Math.round(s * 1000) / 1000, g: gas, b: state.brake, d: state.drift, i: state.item });
+    send({ t: 'in', q: ++seq, s: Math.round(s * 1000) / 1000, g: gas, b: on('brake'), d: on('drift'), i: on('item') });
     last = body; lastSent = now;
+    for (const k in tapped) tapped[k] = 0;
   }
 }, 16);
 
