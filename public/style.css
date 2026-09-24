@@ -1,0 +1,104 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #87ceeb; font-family: 'Luckiest Guy', Impact, system-ui, sans-serif; color: #fff; }
+.hidden { display: none !important; }
+#game canvas { display: block; }
+
+/* ---------- per-player HUD (console style) ---------- */
+#hud { position: fixed; inset: 0; pointer-events: none; }
+.vp { position: absolute; overflow: hidden; border: 3px solid rgba(0, 0, 0, .55); }
+.vp > div { position: absolute; }
+.vp .speedlines { inset: -10%; opacity: 0; transition: opacity .25s;
+  background: repeating-conic-gradient(from 0deg at 50% 55%, rgba(255,255,255,.0) 0deg 5deg, rgba(255,255,255,.35) 5.4deg 5.8deg, rgba(255,255,255,0) 6.2deg 11deg);
+  -webkit-mask: radial-gradient(ellipse at 50% 55%, transparent 38%, #000 75%); mask: radial-gradient(ellipse at 50% 55%, transparent 38%, #000 75%);
+  animation: lines .12s steps(2) infinite; }
+@keyframes lines { 50% { transform: rotate(3deg) scale(1.03); } }
+
+.vp .itemslot { left: 1.3em; top: 1.1em; width: 6.2em; height: 6.2em; }
+.vp .itemslot .ring { position: absolute; inset: 0; border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, rgba(40, 48, 70, .55), rgba(10, 14, 26, .75));
+  border: .32em solid #fff; box-shadow: 0 0 0 .22em rgba(0,0,0,.55), inset 0 0 0 .18em rgba(0,0,0,.35), 0 .35em .6em rgba(0,0,0,.35); }
+.vp .itemslot.full .ring { border-color: #ffe14d; box-shadow: 0 0 0 .22em rgba(0,0,0,.55), 0 0 1.2em rgba(255,225,77,.7); }
+.vp .itemslot .icon { position: absolute; inset: 14%; display: flex; }
+.vp .itemslot .icon svg { width: 100%; height: 100%; filter: drop-shadow(0 .12em 0 rgba(0,0,0,.35)); }
+.vp .itemslot.rolling .icon { animation: roll .14s linear infinite; }
+@keyframes roll { 50% { transform: translateY(-.25em) scale(1.08); } }
+
+.text-3d { color: #fff; -webkit-text-stroke: .09em #111; paint-order: stroke fill; text-shadow: 0 .09em 0 #111; }
+.vp .time { right: 1.2em; top: .9em; font: italic 900 1.9em 'Rubik', system-ui, sans-serif; color: #fff;
+  -webkit-text-stroke: .1em #111; paint-order: stroke fill; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.vp .lap { left: 1.3em; bottom: 1.1em; font: italic 900 3.2em 'Rubik', system-ui, sans-serif; color: #fff; -webkit-text-stroke: .1em #111; paint-order: stroke fill; line-height: 1; }
+.vp .lap small { font-size: .38em; display: block; margin-bottom: .1em; color: #ffe14d; }
+.vp .lap span small { display: inline; font-size: .55em; color: #fff; }
+
+.vp .place { right: .5em; bottom: .1em; font: italic 900 9em 'Rubik', system-ui, sans-serif; line-height: 1; display: flex; align-items: flex-start; }
+.vp .place .n, .vp .place .s { -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-stroke: .045em #1a1a1a; paint-order: stroke fill;
+  filter: drop-shadow(0 .05em 0 #1a1a1a) drop-shadow(0 .08em .1em rgba(0,0,0,.4)); }
+.vp .place .s { font-size: .38em; margin-top: .18em; }
+.p1 { background-image: linear-gradient(180deg, #fff7b0 0%, #ffd400 45%, #ff9500 100%); }
+.p2 { background-image: linear-gradient(180deg, #ffffff 0%, #d9e2ee 45%, #8f9fb5 100%); }
+.p3 { background-image: linear-gradient(180deg, #ffd9b0 0%, #e69a4c 45%, #a4561c 100%); }
+.p4 { background-image: linear-gradient(180deg, #d6ecff 0%, #5fb0ff 45%, #1f5fd1 100%); }
+.vp.solo .tag { display: none; }
+.vp .tag { left: 8.4em; top: 2.6em; font-size: 1.2em; color: var(--c); font-family: 'Luckiest Guy', sans-serif; -webkit-text-stroke: .12em #000; paint-order: stroke fill; }
+
+.vp .banner { left: 0; right: 0; top: 30%; text-align: center; font: italic 900 7em 'Rubik', system-ui, sans-serif; opacity: 0;
+  -webkit-background-clip: text; background-clip: text; color: transparent; background-image: linear-gradient(180deg, #fff 0%, #ffe14d 50%, #ff8a00 100%);
+  -webkit-text-stroke: .05em #1a1a1a; paint-order: stroke fill; filter: drop-shadow(0 .06em 0 #1a1a1a); }
+.vp .banner.go { background-image: linear-gradient(180deg, #eaffea 0%, #5cff7a 50%, #0fa83a 100%); font-size: 9em; }
+.vp .banner.count { font-size: 10em; }
+.vp .banner.final { background-image: linear-gradient(180deg, #fff 0%, #ff8a8a 50%, #d11a1a 100%); }
+.vp .banner.finish { background-image: linear-gradient(180deg, #fff 0%, #ffe14d 45%, #ff5a00 100%); font-size: 8.5em; }
+.vp .banner.pop { animation: pop 1.2s cubic-bezier(.2, 1.4, .4, 1) forwards; }
+@keyframes pop { 0% { opacity: 0; transform: scale(2.4) rotate(-6deg); } 14% { opacity: 1; transform: scale(1) rotate(-3deg); } 80% { opacity: 1; transform: scale(1.04) rotate(-3deg); } 100% { opacity: 0; transform: scale(.9) rotate(-3deg); } }
+
+#minimap { position: fixed; width: 180px; height: 180px; pointer-events: none; filter: drop-shadow(0 4px 8px rgba(0,0,0,.35)); }
+
+#rec { position: fixed; right: 12px; bottom: 10px; font-family: system-ui, sans-serif; font-size: 12px; font-weight: 700;
+  color: #fff; background: rgba(200, 20, 20, .75); padding: 3px 8px; border-radius: 6px; pointer-events: none; }
+
+/* ---------- overlays ---------- */
+.overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: radial-gradient(ellipse at center, rgba(10, 20, 40, .55), rgba(10, 20, 40, .85)); }
+.panel { background: rgba(18, 22, 34, .9); border: 4px solid #ffd400; border-radius: 28px; padding: 28px 36px; max-width: 900px; width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .5); max-height: 100%; overflow: auto; }
+h1 { margin: 0 0 18px; text-align: center; font-size: clamp(48px, 9vw, 96px); color: #ffd400; font-weight: normal;
+  text-shadow: 5px 5px 0 #d62828, 10px 10px 0 rgba(0, 0, 0, .3); transform: rotate(-2deg); }
+.join { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; justify-content: center; }
+#qr { width: 220px; height: 220px; background: #fff; border-radius: 16px; padding: 8px; }
+.how { flex: 1; min-width: 260px; font-family: system-ui, sans-serif; }
+.how h2 { font-family: 'Luckiest Guy', Impact, sans-serif; font-weight: normal; margin: 0 0 8px; font-size: 28px; color: #7fd4ff; }
+.how ol { margin: 0 0 12px; padding-left: 20px; line-height: 1.5; color: #d8dde8; }
+.how code { font-size: 14px; color: #ffd400; white-space: nowrap; }
+.roomlabel { font-family: system-ui, sans-serif; font-size: 13px; letter-spacing: .2em; text-transform: uppercase; color: #8a93a6; }
+#roomcode { font-family: 'Luckiest Guy', Impact, sans-serif; font-size: 76px; line-height: 1; letter-spacing: .12em; color: #fff; margin: 4px 0 12px;
+  text-shadow: 4px 4px 0 #1e40af; }
+#roster { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin: 24px 0 12px; min-height: 60px; }
+.chip { display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-radius: 999px; background: #262c3d; font-size: 22px; border: 3px solid var(--c); }
+.chip .dot { width: 18px; height: 18px; border-radius: 50%; background: var(--c); }
+.chip small { font-family: system-ui; font-size: 12px; color: #9ab; }
+.chip.waiting { opacity: .5; }
+.empty { color: #8a93a6; font-family: system-ui; }
+.hint { text-align: center; font-size: 24px; color: #fff; margin-top: 8px; }
+.hint b, .how b { color: #ffd400; font-weight: normal; }
+.how b { font-weight: 700; }
+.keys { text-align: center; font-family: system-ui; color: #8a93a6; font-size: 13px; margin-top: 8px; }
+
+#recnote { color: #ff8080; }
+#results h1 { font-size: 64px; }
+table { width: 100%; border-collapse: collapse; font-size: 26px; }
+td { padding: 6px 12px; border-bottom: 1px solid rgba(255, 255, 255, .08); }
+td.t { text-align: right; font-variant-numeric: tabular-nums; font-family: system-ui; font-size: 20px; color: #cfd6e4; }
+tr.human td { color: var(--c); }
+tr.human td.t { color: #fff; }
+td .dot { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background: var(--c); margin-right: 10px; }
+
+#mapsel { display: flex; align-items: center; justify-content: center; gap: 18px; margin: 22px 0 4px; text-align: center; }
+#mapsel button { font: 28px 'Luckiest Guy', sans-serif; width: 52px; height: 52px; border-radius: 50%; border: 3px solid #ffd400; background: #262c3d; color: #ffd400; cursor: pointer; }
+#mapsel button:hover { background: #33405c; }
+#mapname { font-size: 36px; color: #fff; min-width: 320px; text-shadow: 3px 3px 0 #d62828; }
+#mapcount { font-family: system-ui; font-size: 12px; color: #8a93a6; letter-spacing: .1em; }
+#results .sub { text-align: center; font-family: system-ui; color: #9ab; margin: -10px 0 14px; }
+#results tr { animation: slidein .4s both; }
+@keyframes slidein { from { opacity: 0; transform: translateX(-40px); } }
+td.pl { font: italic 900 30px 'Rubik', system-ui, sans-serif; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-stroke: 1px #111; width: 70px; }
+td.pl small { font-size: 16px; }

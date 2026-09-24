@@ -1,0 +1,17 @@
+{
+  "name": "pedrokart",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "three": "^0.186.0",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "playwright": "1.55"
+  }
+}

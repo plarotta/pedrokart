@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pedro Kart">
+<title>Pedro Kart Controller</title>
+<style>
+  :root { --me: #e53935; }
+  * { box-sizing: border-box; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #14161c; color: #fff; font-family: -apple-system, system-ui, sans-serif; overflow: hidden; touch-action: none; }
+  .hidden { display: none !important; }
+
+  #join { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; }
+  #join h1 { margin: 0; font-size: 40px; font-weight: 900; font-style: italic; letter-spacing: 1px; color: #ffd400; text-shadow: 3px 3px 0 #d62828; }
+  #name { font-size: 20px; padding: 12px 16px; border-radius: 12px; border: 2px solid #333; background: #20232b; color: #fff; text-align: center; width: 240px; -webkit-user-select: text; user-select: text; }
+  #go { font-size: 22px; font-weight: 800; padding: 14px 48px; border-radius: 14px; border: 0; background: #ffd400; color: #111; }
+  #join p { margin: 0; color: #9aa; font-size: 14px; text-align: center; max-width: 360px; }
+  #join p.err { color: #ff9a9a; }
+  #room { font-size: 28px; font-weight: 900; letter-spacing: .3em; text-transform: uppercase; padding: 10px 8px 10px 18px; border-radius: 12px; border: 2px solid #333; background: #20232b; color: #ffd400; text-align: center; width: 170px; -webkit-user-select: text; user-select: text; }
+  #roomlabel { font-size: 15px; color: #cfd3dc; letter-spacing: .08em; }
+  #roomlabel b { color: #ffd400; font-size: 22px; letter-spacing: .2em; }
+  #consent { display: flex; gap: 10px; align-items: flex-start; max-width: 320px; font-size: 13px; color: #aab; line-height: 1.35; }
+  #consent input { width: 22px; height: 22px; flex: none; margin: 0; }
+
+  #pad { position: fixed; inset: 0; display: flex; gap: 10px;
+    padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+    border: 4px solid var(--me); }
+  .col { flex: 0 0 27%; display: flex; flex-direction: column; gap: 10px; }
+  .btn { border: 0; border-radius: 22px; color: #fff; font-size: 22px; font-weight: 900; letter-spacing: 1px; touch-action: none; transition: transform .05s, filter .05s; }
+  .btn.small { flex: 0 0 32%; font-size: 18px; }
+  .btn.big { flex: 1; }
+  .btn.on { transform: scale(.96); filter: brightness(1.35); }
+  [data-k=gas] { background: #2e9d4a; }
+  [data-k=brake] { background: #9c2f2f; }
+  [data-k=drift] { background: #d9720b; }
+  [data-k=item] { background: #6b3fb5; }
+
+  .center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: space-between; min-width: 0; border-radius: 22px; background: #1c1f27; padding: 10px; }
+  #status { font-size: 15px; color: #cfd3dc; text-align: center; }
+  #info { font-size: 22px; font-weight: 800; text-align: center; }
+  #item { font-size: 56px; height: 64px; line-height: 64px; }
+  #item.rolling { animation: roll .15s linear infinite; }
+  @keyframes roll { 50% { transform: translateY(-6px) scale(1.1); } }
+  #wheel { width: 88px; height: 88px; border-radius: 50%; border: 9px solid var(--me); position: relative; }
+  #wheel::before { content: ''; position: absolute; left: 50%; top: -9px; width: 8px; height: 24px; margin-left: -4px; background: #fff; border-radius: 4px; }
+  #wheel::after { content: ''; position: absolute; left: 8px; right: 8px; top: 50%; height: 8px; margin-top: -4px; background: var(--me); border-radius: 4px; }
+  .row { display: flex; gap: 8px; }
+  .row button { font-size: 14px; padding: 8px 12px; border-radius: 10px; border: 0; background: #2c313c; color: #dfe3ea; }
+  body.touch .center { outline: 2px dashed #555; outline-offset: -6px; }
+
+  body.hit #pad { animation: hit .5s; }
+  @keyframes hit { 0%, 100% { background: transparent; } 30% { background: #7a1010; } }
+
+  #rotate { display: none; position: fixed; inset: 0; background: #14161c; align-items: center; justify-content: center; font-size: 22px; text-align: center; padding: 30px; z-index: 10; }
+  @media (orientation: portrait) { body.playing #rotate { display: flex; } }
+</style>
+</head>
+<body>
+<div id="join">
+  <h1>PEDRO KART</h1>
+  <div id="roomrow"><input id="room" maxlength="4" placeholder="CODE" autocomplete="off" autocapitalize="characters" aria-label="Room code"></div>
+  <div id="roomlabel" class="hidden"></div>
+  <input id="name" maxlength="12" placeholder="Your name" autocomplete="off">
+  <label id="consent" class="hidden"><input type="checkbox" id="rec"> Share my driving (inputs + positions) to help train AI drivers</label>
+  <button id="go">JOIN</button>
+  <p id="note">Hold your phone sideways like a steering wheel. Tilt to steer.</p>
+</div>
+
+<div id="pad" class="hidden">
+  <div class="col">
+    <button class="btn small" data-k="item">ITEM</button>
+    <button class="btn big" data-k="drift">DRIFT</button>
+  </div>
+  <div class="center" id="steerpad">
+    <div id="status">Connecting…</div>
+    <div id="item"></div>
+    <div id="wheel"></div>
+    <div id="info"></div>
+    <div class="row">
+      <button id="recenter">⟲ Center</button>
+      <button id="mode">Tilt</button>
+      <button id="invert">⇄</button>
+    </div>
+  </div>
+  <div class="col">
+    <button class="btn small" data-k="brake">BRAKE</button>
+    <button class="btn big" data-k="gas">GAS</button>
+  </div>
+</div>
+
+<div id="rotate">Turn your phone sideways ↻</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const EMOJI = { mushroom: '🍄', banana: '🍌', shell: '🐢', blueshell: '🔵', bullet: '🚀' };
+const wrap = (a) => ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+const ordinal = (n) => n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th');
+
+const store = {
+  get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
+};
+let id = store.get('pk_id');
+if (!id) { id = Math.random().toString(36).slice(2, 12); store.set('pk_id', id); }
+$('#name').value = store.get('pk_name') || '';
+
+const state = { gas: 0, brake: 0, drift: 0, item: 0 };
+let mode = store.get('pk_mode') || 'tilt';     // 'tilt' | 'touch'
+let invert = store.get('pk_inv') === '1';
+let tilt = null, neutral = null;               // radians, gravity angle in the screen plane
+let touchId = null, touchX0 = 0, touchSteer = 0;
+let ws = null, hostUp = false;
+
+// ---------------------------------------------------------------- tilt
+function onMotion(e) {
+  const g = e.accelerationIncludingGravity;
+  if (!g || g.x == null) return;
+  if (Math.hypot(g.x, g.y) < 2.5) return;      // phone lying flat: angle is noise
+  const a = Math.atan2(g.y, g.x);
+  tilt = tilt == null ? a : tilt + wrap(a - tilt) * 0.5;
+  if (neutral == null) recenter();
+}
+// Snap neutral to the nearest 90° so "level" is exact in either landscape direction.
+function recenter() {
+  if (tilt == null) return;
+  neutral = Math.round(tilt / (Math.PI / 2)) * (Math.PI / 2);
+}
+function steerValue() {
+  if (touchId !== null) return touchSteer;
+  if (mode !== 'tilt' || tilt == null || neutral == null) return 0;
+  let deg = wrap(tilt - neutral) * 180 / Math.PI;
+  if (invert) deg = -deg;
+  const mag = Math.min(1, Math.max(0, Math.abs(deg) - 2) / 33);
+  return Math.sign(deg) * mag;
+}
+
+// ---------------------------------------------------------------- buttons
+document.querySelectorAll('[data-k]').forEach((btn) => {
+  const k = btn.dataset.k;
+  const held = new Set();
+  btn.addEventListener('pointerdown', (e) => { e.preventDefault(); held.add(e.pointerId); state[k] = 1; btn.classList.add('on'); });
+  const off = (e) => { held.delete(e.pointerId); if (!held.size) { state[k] = 0; btn.classList.remove('on'); } };
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) btn.addEventListener(ev, off);
+});
+
+// Touch steering: drag anywhere in the center panel.
+const pad = $('#steerpad');
+pad.addEventListener('pointerdown', (e) => {
+  if (e.target.closest('button') || touchId !== null) return;
+  touchId = e.pointerId; touchX0 = e.clientX; touchSteer = 0;
+  pad.setPointerCapture(e.pointerId);
+});
+pad.addEventListener('pointermove', (e) => {
+  if (e.pointerId !== touchId) return;
+  touchSteer = Math.max(-1, Math.min(1, (e.clientX - touchX0) / (pad.clientWidth * 0.3)));
+});
+for (const ev of ['pointerup', 'pointercancel']) {
+  pad.addEventListener(ev, (e) => { if (e.pointerId === touchId) { touchId = null; touchSteer = 0; } });
+}
+
+$('#recenter').onclick = recenter;
+$('#invert').onclick = () => { invert = !invert; store.set('pk_inv', invert ? '1' : '0'); updateModeUI(); };
+$('#mode').onclick = () => { mode = mode === 'tilt' ? 'touch' : 'tilt'; store.set('pk_mode', mode); updateModeUI(); };
+function updateModeUI() {
+  $('#mode').textContent = mode === 'tilt' ? 'Mode: Tilt' : 'Mode: Touch + auto-gas';
+  $('#invert').style.opacity = invert ? 1 : 0.5;
+  document.body.classList.toggle('touch', mode === 'touch');
+}
+addEventListener('orientationchange', () => setTimeout(recenter, 400));
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+
+// ---------------------------------------------------------------- network
+// Control messages go over a WebSocket through the server (the "relay"). We also try to open a
+// WebRTC data channel straight to the game screen; when it connects (usually: same Wi-Fi), input,
+// pings and pongs use it instead — lower latency, and lost packets are skipped, not retried.
+const ICE = [{ urls: 'stun:stun.l.google.com:19302' }];
+const ERRORS = {
+  'no-room': 'No game with that code — check the big screen.',
+  'room-full': 'That game is full.',
+  'room-closed': 'The host ended the game.',
+  'rate-limited': 'Too many attempts — wait a minute and try again.',
+  'server-full': 'The server is busy — try again soon.',
+};
+let room = (location.pathname.match(/^\/j\/([A-Za-z]{4})/)?.[1] || new URLSearchParams(location.search).get('room') || '').toUpperCase();
+let stopped = false, pc = null, dc = null, rtcChain = Promise.resolve();
+let seq = 0, rtt = null, myName = '';
+
+function wsSend(msg) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg)); }
+function send(msg) {
+  if (dc && dc.readyState === 'open') dc.send(JSON.stringify(msg));
+  else wsSend(msg);
+}
+
+function connect() {
+  const q = new URLSearchParams({ role: 'controller', room, id, name: myName, rec: $('#rec').checked ? '1' : '0' });
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws?${q}`);
+  ws.onopen = () => setStatus();
+  ws.onclose = () => {
+    closePeer();
+    hostUp = false;
+    if (stopped) return;
+    setStatus('Reconnecting…');
+    setTimeout(connect, 1000);
+  };
+  ws.onmessage = (e) => onMessage(JSON.parse(e.data));
+}
+
+function onMessage(m) {
+  if (m.t === 'error') return fail(m.error);
+  if (m.t === 'status') {
+    const was = hostUp;
+    hostUp = m.host;
+    if (hostUp && !was) startPeer(); // host (re)appeared: it has no connection to us yet
+    if (!hostUp) closePeer();
+    setStatus();
+  } else if (m.t === 'rtc') rtcChain = rtcChain.then(() => onRtc(m)).catch(() => {});
+  else if (m.t === 'pong') rtt = performance.now() - m.ts;
+  else if (m.t === 'hud') onHud(m);
+  else if (m.t === 'hit') {
+    document.body.classList.remove('hit'); void document.body.offsetWidth; document.body.classList.add('hit');
+    navigator.vibrate?.(200);
+  }
+}
+
+async function startPeer() {
+  closePeer();
+  if (typeof RTCPeerConnection === 'undefined') return;
+  const mine = (pc = new RTCPeerConnection({ iceServers: ICE }));
+  const ch = mine.createDataChannel('input', { ordered: false, maxRetransmits: 0 });
+  ch.onopen = () => { if (pc === mine) { dc = ch; setStatus(); } };
+  ch.onclose = () => { if (dc === ch) { dc = null; setStatus(); } };
+  ch.onmessage = (e) => onMessage(JSON.parse(e.data));
+  mine.onicecandidate = (e) => { if (e.candidate && pc === mine) wsSend({ t: 'rtc', cand: e.candidate.toJSON() }); };
+  mine.onconnectionstatechange = () => {
+    if (pc === mine && (mine.connectionState === 'failed' || mine.connectionState === 'closed')) { dc = null; setStatus(); }
+  };
+  try {
+    await mine.setLocalDescription(await mine.createOffer());
+    wsSend({ t: 'rtc', sdp: mine.localDescription.toJSON() });
+  } catch { /* stay on the relay */ }
+}
+async function onRtc(m) {
+  if (!pc) return;
+  if (m.sdp) await pc.setRemoteDescription(m.sdp);
+  else if (m.cand) await pc.addIceCandidate(m.cand);
+}
+function closePeer() {
+  try { pc?.close(); } catch {}
+  pc = null; dc = null; rtcChain = Promise.resolve();
+}
+
+// Round-trip time over whichever path input is using; reported to the host for its lobby.
+setInterval(() => {
+  if (!hostUp) return;
+  send({ t: 'ping', ts: performance.now() });
+  if (rtt != null) wsSend({ t: 'rtt', ms: Math.round(rtt), path: dc ? 'direct' : 'relay' });
+  setStatus();
+}, 1000);
+
+function setStatus(text) {
+  if (text) { $('#status').textContent = text; return; }
+  if (!hostUp) { $('#status').textContent = `Room ${room} · waiting for the game screen…`; return; }
+  const link = dc ? '⚡ Direct' : '☁︎ Relay';
+  $('#status').textContent = `${myName} · Room ${room} · ${link}${rtt != null ? ` · ${Math.round(rtt)} ms` : ''}`;
+}
+function onHud(m) {
+  document.documentElement.style.setProperty('--me', m.color);
+  const it = $('#item');
+  it.classList.toggle('rolling', m.item === '?');
+  it.textContent = m.item === '?' ? '❓' : EMOJI[m.item] || '';
+  let info = '';
+  if (m.phase === 'lobby') info = `${m.map || ''} · ITEM start · DRIFT next track`;
+  else if (m.phase === 'results') info = 'Race over · ITEM to continue';
+  else if (m.place != null) info = m.finished ? `Finished ${ordinal(m.place)}!` : `${ordinal(m.place)} · Lap ${m.lap}/${m.laps}`;
+  else info = 'Race in progress — next one soon';
+  $('#info').textContent = info;
+}
+
+function fail(error) {
+  stopped = true;
+  closePeer();
+  try { ws.close(); } catch {}
+  $('#pad').classList.add('hidden');
+  $('#join').classList.remove('hidden');
+  document.body.classList.remove('playing');
+  if (error === 'no-room') { room = ''; showRoom(); }
+  $('#note').textContent = ERRORS[error] || 'Disconnected.';
+  $('#note').classList.add('err');
+}
+
+let last = '', lastSent = 0;
+setInterval(() => {
+  const s = steerValue();
+  $('#wheel').style.transform = `rotate(${s * 90}deg)`;
+  if (!hostUp) return;
+  const gas = state.gas || (mode === 'touch' && !state.brake) ? 1 : 0;
+  const body = JSON.stringify([Math.round(s * 1000) / 1000, gas, state.brake, state.drift, state.item]);
+  const now = performance.now();
+  // Send on change, and at least every 100 ms. `q` lets the host drop packets that arrive out of order.
+  if (body !== last || now - lastSent > 100) {
+    send({ t: 'in', q: ++seq, s: Math.round(s * 1000) / 1000, g: gas, b: state.brake, d: state.drift, i: state.item });
+    last = body; lastSent = now;
+  }
+}, 16);
+
+// ---------------------------------------------------------------- join
+function showRoom() {
+  $('#roomrow').classList.toggle('hidden', !!room);
+  $('#roomlabel').classList.toggle('hidden', !room);
+  $('#roomlabel').innerHTML = room ? `Joining room <b>${room}</b>` : '';
+}
+showRoom();
+$('#room').addEventListener('input', () => { $('#room').value = $('#room').value.toUpperCase().replace(/[^A-Z]/g, ''); });
+fetch('/info.json').then((r) => r.json()).then((info) => {
+  if (!info.record) return;
+  $('#consent').classList.remove('hidden');
+  const saved = store.get('pk_rec');
+  $('#rec').checked = saved != null ? saved === '1' : info.mode === 'local';
+}).catch(() => {});
+
+let started = false;
+$('#go').onclick = async () => {
+  if (!room) {
+    const typed = $('#room').value.trim().toUpperCase();
+    if (!/^[A-Z]{4}$/.test(typed)) { $('#note').textContent = 'Enter the 4-letter code from the big screen.'; $('#note').classList.add('err'); return; }
+    room = typed;
+  }
+  history.replaceState(null, '', `/j/${room}`);
+  // iOS: permission must be requested directly inside the tap handler.
+  if (!started && typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+    try { if ((await DeviceMotionEvent.requestPermission()) !== 'granted') mode = 'touch'; } catch { mode = 'touch'; }
+  }
+  if (!window.isSecureContext) mode = 'touch';
+  myName = $('#name').value.trim() || 'Player';
+  store.set('pk_name', myName);
+  store.set('pk_rec', $('#rec').checked ? '1' : '0');
+  try { await navigator.wakeLock?.request('screen'); } catch {}
+  $('#join').classList.add('hidden');
+  $('#pad').classList.remove('hidden');
+  $('#note').classList.remove('err');
+  document.body.classList.add('playing');
+  updateModeUI();
+  stopped = false;
+  connect();
+  if (!started) {
+    started = true;
+    addEventListener('devicemotion', onMotion);
+    document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+    setTimeout(() => { if (mode === 'tilt' && tilt == null) { mode = 'touch'; updateModeUI(); } }, 2000);
+  }
+};
+if (!window.isSecureContext) $('#note').textContent = 'Tilt steering needs the https:// link — using touch steering here.';
+</script>
+</body>
+</html>

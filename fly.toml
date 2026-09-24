@@ -1,0 +1,32 @@
+# Fly.io config. Before the first deploy: set `app` and PUBLIC_URL to your app's URL (or custom domain).
+#   fly launch --no-deploy --copy-config   # creates the app
+#   fly deploy
+app = "pedrokart"
+primary_region = "sjc"
+
+[env]
+  PUBLIC_URL = "https://pedrokart.fly.dev"
+  # RECORD = "1"          # record races of players who opt in (needs the volume below)
+  # DATA_DIR = "/data/races"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"   # sleeps when idle; open WebSockets keep it awake
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 2000
+    hard_limit = 4000
+
+# Rooms live in memory, so run exactly ONE machine (`fly scale count 1`).
+# Scaling out needs room-aware routing first (e.g. Fly's fly-replay header or Durable Objects).
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+
+# [mounts]
+#   source = "pedrokart_data"
+#   destination = "/data"

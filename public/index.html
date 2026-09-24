@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pedro Kart</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏎️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Rubik:ital,wght@1,900&display=swap">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{ "imports": { "three": "/vendor/three.module.js" } }</script>
+</head>
+<body>
+<div id="game"></div>
+<div id="hud"></div>
+<canvas id="minimap" width="360" height="360"></canvas>
+<div id="rec" class="hidden">● REC</div>
+
+<div id="lobby" class="overlay">
+  <div class="panel">
+    <h1>PEDRO KART</h1>
+    <div class="join">
+      <img id="qr" alt="QR code to join this game">
+      <div class="how">
+        <div class="roomlabel">Room code</div>
+        <div id="roomcode">····</div>
+        <ol>
+          <li>Scan the code with your phone's camera, or open <code id="url">…</code></li>
+          <li id="certnote" class="hidden">Same Wi-Fi as this computer. Safari warns about the certificate: tap <b>Show Details</b> → <b>visit this website</b>.</li>
+          <li>Tap <b>Join</b>, allow motion access, and hold the phone sideways like a wheel.</li>
+        </ol>
+      </div>
+    </div>
+    <div id="mapsel">
+      <button id="mapprev" aria-label="Previous map">◀</button>
+      <div><div id="mapname"></div><div id="mapcount"></div></div>
+      <button id="mapnext" aria-label="Next map">▶</button>
+    </div>
+    <div id="roster"></div>
+    <div class="hint">Press <b>ITEM</b> on a phone or <b>Enter</b> to start · <b>DRIFT</b> / ◀ ▶ changes the track</div>
+    <div id="recnote" class="keys hidden">● Races of players who opt in on their phone are recorded to train AI drivers</div>
+    <div class="keys">Keyboard: ←→ steer · ↑ gas · ↓ brake · Space drift · Shift item</div>
+  </div>
+</div>
+
+<div id="results" class="overlay hidden"><div class="panel"></div></div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

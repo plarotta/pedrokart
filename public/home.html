@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pedro Kart</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏎️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&display=swap">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body { font-family: system-ui, sans-serif; color: #fff; display: flex; align-items: center; justify-content: center; padding: 24px 16px; min-height: 100vh;
+    background: radial-gradient(ellipse at 50% 0%, #3b82f6 0%, #1e3a8a 45%, #0b1024 100%); }
+  main { width: 100%; max-width: 860px; text-align: center; }
+  h1 { font-family: 'Luckiest Guy', Impact, sans-serif; font-weight: normal; font-size: clamp(56px, 13vw, 120px); margin: 0; color: #ffd400;
+    text-shadow: 5px 5px 0 #d62828, 10px 10px 0 rgba(0, 0, 0, .3); transform: rotate(-2deg); line-height: 1; }
+  .tag { color: #c7d2fe; margin: 14px 0 36px; font-size: 17px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+  .card { background: rgba(10, 16, 40, .72); border: 3px solid rgba(255, 255, 255, .15); border-radius: 24px; padding: 26px 22px; }
+  .card h2 { font-family: 'Luckiest Guy', Impact, sans-serif; font-weight: normal; margin: 0 0 6px; font-size: 32px; }
+  .card p { margin: 0 0 18px; color: #aab4d4; font-size: 15px; line-height: 1.45; }
+  .btn { display: inline-block; font-family: 'Luckiest Guy', Impact, sans-serif; font-size: 26px; padding: 14px 34px; border-radius: 16px; border: 0; cursor: pointer;
+    background: #ffd400; color: #1a1a1a; text-decoration: none; box-shadow: 0 6px 0 #b38f00; }
+  .btn:active { transform: translateY(3px); box-shadow: 0 3px 0 #b38f00; }
+  .btn.green { background: #34d058; box-shadow: 0 6px 0 #1f8a38; }
+  form { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  input { font-family: 'Luckiest Guy', Impact, sans-serif; font-size: 30px; letter-spacing: .25em; text-transform: uppercase; text-align: center;
+    width: 190px; padding: 10px 8px 8px 16px; border-radius: 14px; border: 3px solid #4b5b9c; background: #0b1024; color: #fff; }
+  input:focus { outline: none; border-color: #ffd400; }
+  .err { color: #ff9a9a; min-height: 20px; margin-top: 10px; font-size: 14px; }
+  .how { margin-top: 30px; color: #8d99c2; font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>PEDRO KART</h1>
+  <p class="tag">Race on the big screen. Steer with your phone.</p>
+  <div class="cards">
+    <section class="card">
+      <h2>Host a game</h2>
+      <p>On a laptop or TV browser. You'll get a room code and a QR code for everyone to join.</p>
+      <a class="btn" href="/host">Host</a>
+    </section>
+    <section class="card">
+      <h2>Join a game</h2>
+      <p>On your phone. Enter the code on the big screen, or just scan its QR code.</p>
+      <form id="join">
+        <input id="code" maxlength="4" autocomplete="off" autocapitalize="characters" placeholder="CODE" aria-label="Room code">
+        <button class="btn green" type="submit">Join</button>
+      </form>
+      <div class="err" id="err"></div>
+    </section>
+  </div>
+  <p class="how">Up to 4 players race at once, against CPU drivers. Hold your phone sideways and tilt to steer.</p>
+</main>
+<script>
+  const code = document.getElementById('code');
+  code.addEventListener('input', () => { code.value = code.value.toUpperCase().replace(/[^A-Z]/g, ''); });
+  document.getElementById('join').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (code.value.length !== 4) { document.getElementById('err').textContent = 'Room codes are 4 letters.'; return; }
+    location.href = `/j/${code.value}`;
+  });
+</script>
+</body>
+</html>
