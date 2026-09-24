@@ -1,118 +1,151 @@
-# Pedro Kart
+<p align="center"><img src="public/banner.jpg" alt="Pedro Kart" width="100%"></p>
 
-A kart racer that runs in the browser on your Mac, steered with your iPhone as a tilt wheel.
-Up to 4 players (split screen) against CPU racers, 3 laps, drifting with mini-turbos, boost pads,
-items (mushroom, banana, green shell, blue shell, Bullet Bill), and several tracks.
+A kart racer that runs in a browser. The laptop or TV is the screen; everyone's phone is the steering
+wheel. No app to install: scan a QR code, hold the phone sideways, tilt to steer.
 
-## Run
+Up to 4 players race 3 laps against CPU drivers on five tracks, with drifting, boost pads, and items.
+
+## Quick start
 
 ```sh
 npm install
 npm start
 ```
 
-1. On the Mac, open **http://localhost:8080/host** (fullscreen with ⌃⌘F). It gets a room code.
-2. On the iPhone (same Wi-Fi), scan the QR code. Safari will warn about the self-signed
-   certificate: tap **Show Details → visit this website**. iOS only allows the motion sensors on HTTPS.
-3. Tap **Join**, allow motion access, and hold the phone sideways like a steering wheel.
-4. Press **ITEM** on a phone (or Enter on the Mac) to start.
+1. On your computer, open **http://localhost:8080/host**. You get a room code and a QR code.
+2. On each phone (same Wi-Fi), scan the QR. Safari warns about the certificate: tap
+   **Show Details → visit this website**. *(The server makes its own HTTPS certificate because iOS only
+   gives motion sensors to secure pages. Hosted on a real domain, this step disappears.)*
+3. Tap **Join**, allow motion access, hold the phone like a wheel.
+4. Press **ITEM** to start. **DRIFT** in the lobby switches tracks.
 
-Reloading the game tab keeps the same room, and connected phones stay in.
-
-## Controls
+## Playing
 
 | Phone | Keyboard | |
 |---|---|---|
-| Tilt like a wheel | ← → | Steer |
-| GAS | ↑ | Accelerate |
-| BRAKE | ↓ | Brake / reverse |
-| DRIFT (hold while turning) | Space | Drift. Sparks go blue → orange; let go for a boost |
-| ITEM | Shift | 🍄 boost · 🍌 drop behind · 🐢 green shell · 🔵 blue shell (hunts 1st place) · 🚀 Bullet Bill (autopilot) |
+| Tilt | ← → | Steer |
+| GAS / BRAKE | ↑ / ↓ | Go / stop, reverse |
+| DRIFT (hold into a turn) | Space | Slide; sparks go white → blue → orange; let go for a boost |
+| ITEM | Shift | 🍄 boost · 🍌 drop · 🐢 fire · 🔵 hits 1st place · 🚀 autopilot bullet |
 
-Hold GAS just after the "2" in the countdown for a rocket start. In the lobby, DRIFT on a phone (or ◀ ▶ on the
-keyboard) switches tracks.
+Hold GAS right after the "2" for a rocket start. Items from the boxes are better the further back you are.
+On the phone, **⟲ Center** re-levels the wheel and **Mode** switches to touch steering with auto-gas.
 
-Phone extras: **⟲ Center** re-levels the wheel, **Mode** switches to touch steering with
-auto-gas, **⇄** inverts the tilt direction.
+## How it works
 
-If the HTTPS page won't connect, the touch-only fallback at `http://<mac-ip>:8080/c` works without the certificate.
+The big screen *is* the game. Phones are controllers. The server is a switchboard.
 
-## Layout
-
-- `server.js`: static server (HTTP + self-signed HTTPS), WebSocket relay, race recorder, `/maps.json`
-- `public/main.js`: game loop, kart physics, CPU AI, items, split screen, HUD, data recording
-- `public/world.js`: level builder (sky, terrain, road, walls, scenery) driven by a map's theme
-- `public/kart.js`, `public/fx.js`, `public/icons.js`: kart/driver models, particles, HUD item art
-- `public/maps/*.js`: one file per track (see below)
-- `public/controller.html`: the phone controller
-
-## Making tracks
-
-A track is one file in `public/maps/`: a closed loop of `ctrl` points, item box rows, boost pads, a `theme`
-(overrides of `DEFAULT_THEME` in `world.js`) and optional `terrain` / `decorate` hooks. New files show up in
-the lobby automatically.
-
-```sh
-node tools/check-map.mjs public/maps/mytrack.js          # geometry checks (corner radius, overlaps, start straight…)
-node tools/shoot.mjs --map mytrack --top --lobby --at 3,10,20   # screenshots of a bot racing it → shots/mytrack/
+```
+   phone ──┐                       ┌──────────────────────────────────────┐
+   phone ──┼── input (60/s) ─────▶ │ host browser: the whole game         │
+   phone ──┘ ◀── HUD (10/s) ────── │ 60 Hz sim · AI · items · 1–4 cameras │
+        │                          └──────────────────┬───────────────────┘
+        │   WebRTC direct when possible               │ recordings (opt-in)
+        └──── else via ────▶  server: rooms, relay, signaling, recorder
 ```
 
-## How phones connect
+- **The host is authoritative.** Physics, AI, and items all run in the host's browser on a fixed 60 Hz
+  tick, independent of frame rate. The server has no game logic, which is why hosting it costs nearly nothing.
+- **Input takes the shortest path.** Phone and host open a WebRTC data channel through the server. On the
+  same Wi-Fi it connects directly, so input never leaves the room (~1–10 ms). It's sent unordered with no
+  retries, and sequence numbers drop stale packets, so a lost packet never delays newer input. If a
+  network blocks device-to-device traffic, input falls back to the server relay automatically. The lobby
+  shows each player's path (⚡ direct / ☁︎ relay) and latency.
+- **Tilt is one angle.** Steering is the direction of gravity in the screen plane, zeroed to the nearest
+  90°. That works in either landscape orientation and doesn't care about platform sign conventions.
+- **Everything lives in track coordinates.** A track is a closed spline sampled at 1,600 points. Physics,
+  walls, lap counting, CPU steering, and item placement all work in "distance along, offset across".
+- **CPU drivers** chase a point ahead on the racing line, drift through bends, and rubber-band toward
+  the humans so races stay close.
+- **Split screen** renders one camera per player into its own viewport, re-aiming the shadow map for each.
 
-Each game screen ("host") gets a 4-letter room from the server; phones join it at `/j/<CODE>`. Every phone
-keeps a WebSocket to the server (the *relay*), which forwards its messages to the room's host. Over that
-relay the phone and host also set up a **WebRTC data channel**; when it connects (usually: same Wi-Fi)
-input goes straight from phone to game screen without touching the server, sent unordered and without
-retries so a lost packet never delays newer input. If it can't connect (guest/hotel Wi-Fi that isolates
-devices, or different networks), input stays on the relay automatically. The phone and the lobby show
-which path each player is on (⚡ direct / ☁︎ relay) and the round-trip time.
+## Tracks
 
-## Hosting it on the web
+| | |
+|---|---|
+| **Mushroom Circuit** | Grandstands, bunting, giant mushrooms, hot-air balloons |
+| **Coconut Coast** | Sandbar lighthouse, lagoon, smoking volcano, animated sea |
+| **Sunset Canyon** | Layered mesas, a pyramid against the sun, a ribcage over the road |
+| **Frosty Peaks** | Lodge, gondola, frozen lake, falling snow |
+| **Neon City Nights** | Neon arch tunnel, skyline, ferris wheel, suspension bridge |
 
-`PUBLIC_URL` switches the server to hosted mode: one HTTP listener on `$PORT` behind the platform's HTTPS,
-join links/QR codes use your domain, no self-signed certificate, and recording is off unless `RECORD=1`
-(then only players who tick the opt-in on their phone are recorded).
+A track is one file in `public/maps/`: control points, item rows, boost pads, a theme (colours, lighting,
+props), and optional hooks for custom terrain and decorations. New files appear in the lobby on reload.
 
 ```sh
-PUBLIC_URL=https://your.domain PORT=8080 npm start
+node tools/check-map.mjs public/maps/mytrack.js                 # corner radius, overlaps, straight start
+node tools/shoot.mjs --map mytrack --top --lobby --at 3,10,20   # bot races it, screenshots → shots/
 ```
 
-Fly.io (config in `fly.toml`, image in `Dockerfile`):
+## Training AI drivers
+
+Races are recorded for behavioral cloning. That's why the simulation runs on a fixed tick. Each file
+in `data/races/` is gzipped JSON lines:
+
+- A **meta** line with the roster, map, physics constants, and the names of every field.
+- One **tick** line per step. It holds the full world state, and for each human the 100-number
+  observation they saw and the input they pressed.
+- An **end** line with the results.
+
+`observe()` in `public/main.js` defines what a driver sees. The same function will feed a trained policy
+in-game, so training and deployment can't drift apart.
+
+```sh
+uv run ml/load_races.py --min-finish --map circuit   # → data/bc_dataset.npz (obs, act, episodes)
+```
+
+Only players who tick **"share my driving"** on their phone are recorded. That's on by default locally
+and off when hosted. Everyone else appears only as a kart position.
+
+## Hosting it
+
+Set `PUBLIC_URL` and the same server runs as a website. It becomes one HTTP listener behind your
+platform's HTTPS, join links use your domain, and there's no certificate warning. Recording stays off
+unless you set `RECORD=1`.
 
 ```sh
 brew install flyctl && fly auth login
-fly launch --no-deploy --copy-config   # pick an app name; set PUBLIC_URL in fly.toml to match
-fly deploy
-fly scale count 1                      # rooms live in memory: exactly one machine
+fly launch --no-deploy --copy-config    # set app name + PUBLIC_URL in fly.toml
+fly deploy && fly scale count 1
 ```
 
-Then anyone opens your URL, clicks **Host** on a laptop/TV, and phones scan the QR (or type the code at
-your URL). Rooms live in the server's memory, so run a single instance until there's room-aware routing.
+Anyone opens your URL and clicks **Host**; phones scan the QR or type the code. Rooms live in memory, so
+run exactly one machine until rooms are routed across instances.
 
-## Data collection (behavioral cloning)
+## Security
 
-Every race is recorded to `data/races/<timestamp>.jsonl.gz` (a red **● REC** badge shows while
-recording). Turn it off with `RECORD=0 npm start`. Only players who tick "share my driving" on their
-phone are recorded (checked by default locally, unchecked when hosted); others appear only as positions.
+**What's handled**
+- Phones can only talk to their own room's host, and hosts only to their own phones.
+- Room tokens let a reloaded host reclaim its room; guessing a code doesn't.
+- All input is size-capped and rate-limited:
+  - messages per socket
+  - connections per IP
+  - room creation and bad join codes per IP
+  - one WebRTC offer per second per player
+- Recordings are capped per race, with one active per room.
+- Names are sanitized on the server and escaped on screen.
+- Malformed requests get a 400 instead of crashing the process.
+- Static files are confined to their folder.
+- Pages ship CSP, `nosniff`, `no-referrer`, and `frame-ancestors 'none'`.
+- The HTTPS private key, recordings, and screenshots are git-ignored.
 
-Each file is gzipped JSON lines:
+**What to know**
+- **Room codes are for convenience, not secrecy.** There are 160k of them, rate-limited. Anyone
+  with the code can join, and there's no kick or lock yet.
+- **The host decides what gets recorded.** Treat recordings from other people's hosts as untrusted data.
+- **CSP still allows inline scripts,** because the pages are single files.
+- **Local mode listens on your whole network.** Anyone on the same Wi-Fi can open a room.
 
-- **meta**: roster (which kart is which player / pid / device), `obs_names`, `state_names`,
-  `action_names`, track definition, physics constants, `sim_hz` (60)
-- **tick** (one per 60 Hz simulation step, countdown included):
-  - `state[i]`: raw state of every kart (see `state_names`)
-  - `obs[i]`: 90-dim kart-relative observation, only for karts a human is driving that tick
-  - `act[i]`: `[steer, gas, brake, drift, item]` for every kart (humans and CPUs)
-  - `src`: who controlled each kart (`h` human, `c` CPU/autopilot, `n` disconnected)
-  - `bananas`, `shells`, `boxes`: hazards and item box state
-- **end** (results and finish times) or **abort** (game tab closed mid-race)
+## Layout
 
-`observe()` in `public/main.js` defines the observation. It's the same function a trained policy
-will be fed in-game, so train/deploy features always match. If you change it, bump `OBS_VERSION`.
-
-Build a training set:
-
-```sh
-uv run ml/load_races.py                 # → data/bc_dataset.npz (obs, act, episode, ...)
-uv run ml/load_races.py --min-finish    # only drivers who finished
 ```
+server.js             rooms, relay, WebRTC signaling, recorder, static files
+public/home.html      landing page (host / join)
+public/index.html     the game screen      public/main.js    sim, items, AI, cameras, HUD, recording
+public/controller.html  the phone          public/world.js   builds a level from a map's theme
+public/kart.js · fx.js · icons.js          karts and drivers, particles, item art
+public/maps/*.js      one file per track   tools/            map checker, screenshot bots
+ml/load_races.py      recordings → training arrays
+```
+
+*A fan project, not affiliated with Nintendo.*

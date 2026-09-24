@@ -36,6 +36,9 @@ const MAX_ROOMS = 2000;
 const MAX_PHONES_PER_ROOM = 8;
 const ROOM_GRACE_MS = 2 * 60 * 1000; // keep a room this long after its host disconnects (page reloads)
 const MAX_CONTROLLER_MSG = 4096;
+const MAX_MSGS_PER_SEC = 150;          // phones send ~60/s; more than this is dropped
+const MAX_CONNS_PER_IP = 40;
+const MAX_RECORDING_BYTES = 64 * 1024 * 1024; // uncompressed, per race
 
 function lanIP() {
   const ifs = os.networkInterfaces();
@@ -74,27 +77,53 @@ function allow(ip, action, perMinute) {
   hits.set(k, n);
   return n <= perMinute;
 }
-const clientIP = (req) => req.headers['fly-client-ip'] || String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
+// Forwarding headers are only trustworthy behind the hosting platform's proxy.
+const clientIP = (req) => (HOSTED && (req.headers['fly-client-ip'] || String(req.headers['x-forwarded-for'] || '').split(',')[0].trim())) || req.socket.remoteAddress;
+
+// Drop messages beyond `perSec` per second on one socket; close it if it keeps flooding.
+function floodGuard(ws, perSec) {
+  let n = 0, strikes = 0;
+  const t = setInterval(() => { if (n > perSec * 3 && ++strikes >= 3) ws.terminate(); n = 0; }, 1000);
+  ws.on('close', () => clearInterval(t));
+  return () => ++n <= perSec;
+}
 
 // ---------------------------------------------------------------- http
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml',
-  '.png': 'image/png', '.ico': 'image/x-icon',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.ico': 'image/x-icon',
 };
 
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'Content-Security-Policy': [
+    "default-src 'self'", "script-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src https://fonts.gstatic.com", "img-src 'self' data: blob:", "connect-src 'self' ws: wss:", "frame-ancestors 'none'",
+    "base-uri 'none'", "form-action 'self'",
+  ].join('; '),
+};
 function sendFile(res, file) {
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); res.end('Not found'); return; }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
     res.end(data);
   });
 }
 const json = (res, obj) => { res.writeHead(200, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-cache' }); res.end(JSON.stringify(obj)); };
 
 async function handle(req, res) {
+  try {
+    await route(req, res);
+  } catch {
+    if (!res.headersSent) res.writeHead(400);
+    res.end();
+  }
+}
+async function route(req, res) {
   const url = new URL(req.url, 'http://x');
-  let p = decodeURIComponent(url.pathname);
+  let p = decodeURIComponent(url.pathname); // throws on malformed escapes → 400
   if (p === '/qr.svg') {
     const code = String(url.searchParams.get('room') || '').toUpperCase();
     if (!/^[A-Z]{4}$/.test(code)) { res.writeHead(400); res.end(); return; }
@@ -111,7 +140,7 @@ async function handle(req, res) {
   else if (p === '/c' || p === '/controller' || /^\/j\/[A-Za-z]{4}\/?$/.test(p)) p = '/controller.html';
   const [base, rel] = p.startsWith('/vendor/') ? [VENDOR, p.slice(8)] : [PUBLIC, p.slice(1)];
   const file = path.normalize(path.join(base, rel));
-  if (!file.startsWith(base)) { res.writeHead(403); res.end(); return; }
+  if (!file.startsWith(base + path.sep)) { res.writeHead(403); res.end(); return; }
   sendFile(res, file);
 }
 
@@ -123,27 +152,35 @@ function onRecord(room, m) {
   if (!RECORD || typeof m.id !== 'string' || !/^[\w-]{1,64}$/.test(m.id)) return;
   const id = `${m.id}_${room.code}`;
   if (m.op === 'start') {
+    if ([...recordings.values()].some((gz) => gz.room === room.code)) abortRecordings(room.code); // one race per room at a time
     fs.mkdirSync(DATA_DIR, { recursive: true });
     const file = path.join(DATA_DIR, `${id}.jsonl.gz`);
     const gz = zlib.createGzip();
     gz.pipe(fs.createWriteStream(file));
-    Object.assign(gz, { file, room: room.code });
-    gz.write(JSON.stringify(m.meta) + '\n');
+    Object.assign(gz, { file, room: room.code, bytes: 0 });
+    gz.write(JSON.stringify(m.meta ?? null) + '\n');
     recordings.set(id, gz);
     console.log(`[${room.code}] recording race → ${path.relative(ROOT, file)}`);
     return;
   }
   const gz = recordings.get(id);
   if (!gz) return;
-  if (m.op === 'rows' && Array.isArray(m.rows)) for (const row of m.rows) gz.write(JSON.stringify(row) + '\n');
-  if (m.op === 'end') finishRecording(id, m.summary);
+  if (m.op === 'rows' && Array.isArray(m.rows)) {
+    for (const row of m.rows) {
+      const line = JSON.stringify(row) + '\n';
+      gz.bytes += line.length;
+      if (gz.bytes > MAX_RECORDING_BYTES) return finishRecording(id, { type: 'abort', reason: 'size-limit' });
+      gz.write(line);
+    }
+  }
+  if (m.op === 'end') finishRecording(id, m.summary && typeof m.summary === 'object' ? m.summary : { type: 'end' });
 }
 function finishRecording(id, summary) {
   const gz = recordings.get(id);
   if (!gz) return;
   gz.end(JSON.stringify(summary) + '\n');
   recordings.delete(id);
-  console.log(`[${gz.room}] saved ${path.relative(ROOT, gz.file)}${summary.type === 'abort' ? ' (race aborted)' : ''}`);
+  console.log(`[${gz.room}] saved ${path.relative(ROOT, gz.file)}${summary?.type === 'abort' ? ' (race aborted)' : ''}`);
 }
 const abortRecordings = (code) => {
   for (const [id, gz] of [...recordings]) if (!code || gz.room === code) finishRecording(id, { type: 'abort' });
@@ -183,14 +220,17 @@ function onHost(ws, q, ip) {
     console.log(`[${room.code}] created (${rooms.size} rooms open)`);
   }
   room.host = ws;
+  const ok = floodGuard(ws, 400);
   send(ws, { t: 'room', code: room.code, token: room.token, joinUrl: joinUrl(room.code) });
   for (const [pid, c] of room.controllers) {
     send(ws, { t: 'join', pid, name: c.name, rec: c.rec });
     send(c.ws, { t: 'status', host: true });
   }
   ws.on('message', (data) => {
+    if (!ok()) return;
     let m;
     try { m = JSON.parse(data); } catch { return; }
+    if (!m || typeof m !== 'object') return;
     if (m.t === 'toPlayer') send(room.controllers.get(m.pid)?.ws, m.msg); // only players in this room
     else if (m.t === 'rec') onRecord(room, m);
   });
@@ -219,8 +259,9 @@ function onController(ws, q, ip) {
   send(room.host, { t: 'join', pid, name, rec });
   send(ws, { t: 'status', host: !!room.host, room: room.code });
 
+  const ok = floodGuard(ws, MAX_MSGS_PER_SEC);
   ws.on('message', (data) => {
-    if (data.length > MAX_CONTROLLER_MSG) return;
+    if (data.length > MAX_CONTROLLER_MSG || !ok()) return;
     let m;
     try { m = JSON.parse(data); } catch { return; }
     send(room.host, { t: 'msg', pid, m });
@@ -232,18 +273,25 @@ function onController(ws, q, ip) {
   });
 }
 
+const connsPerIP = new Map();
 function onConnection(ws, req) {
   const q = new URL(req.url, 'http://x').searchParams;
+  const ip = clientIP(req);
+  const n = (connsPerIP.get(ip) || 0) + 1;
+  connsPerIP.set(ip, n);
+  ws.on('close', () => { const left = connsPerIP.get(ip) - 1; if (left > 0) connsPerIP.set(ip, left); else connsPerIP.delete(ip); });
+  if (n > MAX_CONNS_PER_IP) return reject(ws, 'rate-limited');
+  ws.on('error', () => {});
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
-  if (q.get('role') === 'host') onHost(ws, q, clientIP(req));
-  else onController(ws, q, clientIP(req));
+  if (q.get('role') === 'host') onHost(ws, q, ip);
+  else onController(ws, q, ip);
 }
 
 const servers = [http.createServer(handle)];
 if (!HOSTED) servers.push(https.createServer(ensureCert(), handle));
 for (const server of servers) {
-  const wss = new WebSocketServer({ server, perMessageDeflate: false, maxPayload: 4 * 1024 * 1024 });
+  const wss = new WebSocketServer({ server, perMessageDeflate: false, maxPayload: 1024 * 1024 });
   wss.on('connection', onConnection);
   // Phones that lock their screen vanish without a close frame; ping to notice.
   setInterval(() => {

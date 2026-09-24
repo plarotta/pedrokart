@@ -186,6 +186,7 @@ const ERRORS = {
   'server-full': 'The server is busy — try again soon.',
 };
 let room = (location.pathname.match(/^\/j\/([A-Za-z]{4})/)?.[1] || new URLSearchParams(location.search).get('room') || '').toUpperCase();
+if (!/^[A-Z]{4}$/.test(room)) room = ''; // never trust the URL: it ends up in the page
 let stopped = false, pc = null, dc = null, rtcChain = Promise.resolve();
 let seq = 0, rtt = null, myName = '';
 
@@ -312,7 +313,7 @@ setInterval(() => {
 function showRoom() {
   $('#roomrow').classList.toggle('hidden', !!room);
   $('#roomlabel').classList.toggle('hidden', !room);
-  $('#roomlabel').innerHTML = room ? `Joining room <b>${room}</b>` : '';
+  $('#roomlabel').replaceChildren(...(room ? ['Joining room ', Object.assign(document.createElement('b'), { textContent: room })] : []));
 }
 showRoom();
 $('#room').addEventListener('input', () => { $('#room').value = $('#room').value.toUpperCase().replace(/[^A-Z]/g, ''); });

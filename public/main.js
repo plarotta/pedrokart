@@ -20,7 +20,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 document.getElementById('game').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const fx = new FX(scene);
@@ -815,6 +815,9 @@ function onPlayerMsg(pid, m, via) {
     p.path = m.path === 'direct' ? 'direct' : 'relay';
     if (changed || phase === 'lobby') renderRoster();
   } else if (m.t === 'rtc') {
+    const now = performance.now();
+    if (m.sdp && p.lastOffer != null && now - p.lastOffer < 1000) return; // one new connection attempt per second
+    if (m.sdp) p.lastOffer = now;
     p.rtcChain = (p.rtcChain || Promise.resolve()).then(() => onRtc(p, m)).catch((e) => console.warn('webrtc', e));
   }
 }
