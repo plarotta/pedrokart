@@ -806,7 +806,11 @@ function onPlayerMsg(pid, m, via) {
   if (m.t === 'in') {
     if (!(m.q > p.lastSeq)) return; // unordered data channel: ignore stale packets
     p.lastSeq = m.q;
-    Object.assign(p.input, { steer: clamp(+m.s || 0, -1, 1), gas: m.g ? 1 : 0, brake: m.b ? 1 : 0, drift: m.d ? 1 : 0, item: m.i ? 1 : 0 });
+    Object.assign(p.input, { steer: clamp(+m.s || 0, -1, 1), gas: m.g ? 1 : 0, brake: m.b ? 1 : 0 });
+    p.held = { drift: m.d ? 1 : 0, item: m.i ? 1 : 0 };
+    // Latch presses until a tick sees them: on a slow game screen, press and release can both land between ticks.
+    if (m.d) p.tapDrift = 1;
+    if (m.i) p.tapItem = 1;
   } else if (m.t === 'ping') {
     const pong = { t: 'pong', ts: m.ts };
     if (via === 'direct' && p.dc?.readyState === 'open') p.dc.send(JSON.stringify(pong));
@@ -1085,6 +1089,12 @@ let frozen = false; // debug: pause the simulation (tools/closeup.mjs)
 function tick() {
   const dt = STEP;
   frameNo++;
+  for (const p of players.values()) {
+    if (!p.held) continue; // keyboard players are polled directly
+    p.input.drift = p.held.drift || p.tapDrift || 0;
+    p.input.item = p.held.item || p.tapItem || 0;
+    p.tapDrift = p.tapItem = 0;
+  }
   pollKeyboard(dt);
   handleMenuInput();
   const row = rec.active && (phase === 'countdown' || phase === 'race') ? rec.begin() : null;

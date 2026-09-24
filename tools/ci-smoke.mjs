@@ -67,6 +67,11 @@ try {
   const host = await ctx.newPage();
   await host.setViewportSize({ width: 640, height: 400 });
   host.on('pageerror', (e) => errors.push(`host: ${e.message}`));
+  // SMOKE_CPU_THROTTLE=8 slows the game screen's CPU down, to reproduce slow CI runners locally.
+  if (process.env.SMOKE_CPU_THROTTLE) {
+    const cdp = await ctx.newCDPSession(host);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.SMOKE_CPU_THROTTLE) });
+  }
   await host.goto(`${BASE}/host?quality=low`);
   await host.waitForFunction(() => /^[A-Z]{4}$/.test(document.getElementById('roomcode')?.textContent || ''), null, { timeout: 60000 });
   const code = await host.evaluate(() => document.getElementById('roomcode').textContent);

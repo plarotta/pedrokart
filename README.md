@@ -164,4 +164,4 @@ public/maps/*.js      one file per track   tools/            map checker, screen
 ml/load_races.py      recordings → training arrays
 ```
 
-*A fan project, not affiliated with Nintendo.*
+MIT licensed; see [LICENSE](LICENSE). The license covers this code, not anyone's trademarks. *A fan project, not affiliated with Nintendo.*
