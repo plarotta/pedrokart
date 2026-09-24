@@ -108,9 +108,9 @@ try {
   console.log('  host fps:', await fpsOf(host));
   await waitFor(host, () => pk.phase === 'race', 'the race to start', 60000);
   const p0 = await host.evaluate(() => pk.karts.find((k) => k.player).progress);
-  await host.waitForTimeout(6000);
+  await host.waitForTimeout(10000); // generous: CI runners render the game at a few fps
   const race = await host.evaluate(() => { const k = pk.karts.find((k) => k.player); return { progress: k.progress, speed: k.speed, recording: pk.rec.active }; });
-  check(race.progress - p0 > 20, 'phone input drives the kart', `${(race.progress - p0).toFixed(0)} m in 6 s`);
+  check(race.progress - p0 > 20, 'phone input drives the kart', `${(race.progress - p0).toFixed(0)} m in 10 s`);
   check(race.recording, 'race is being recorded (player opted in)');
 
   // ---- items work
