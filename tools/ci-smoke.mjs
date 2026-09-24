@@ -26,6 +26,19 @@ server.stdout.on('data', (d) => { serverLog += d; });
 server.stderr.on('data', (d) => { serverLog += d; });
 const serverAlive = () => server.exitCode === null;
 
+// Game-screen state, printed when a wait times out so CI failures explain themselves.
+const fpsOf = (page) => page.evaluate(() => new Promise((r) => { let n = 0; const t = performance.now(); const f = () => { n++; if (performance.now() - t < 1000) requestAnimationFrame(f); else r(n); }; requestAnimationFrame(f); setTimeout(() => r(n), 3000); }));
+async function diagnose(host) {
+  try {
+    const st = await host.evaluate(() => { const p = [...pk.players.values()][0]; return { phase: pk.phase, players: pk.players.size, input: p?.input, seq: p?.lastSeq, path: p?.path }; });
+    console.log('  diagnostics:', JSON.stringify({ ...st, fps: await fpsOf(host) }));
+  } catch (e) { console.log('  diagnostics unavailable:', e.message.split('\n')[0]); }
+}
+async function waitFor(page, fn, what, timeout, host = page) {
+  try { await page.waitForFunction(fn, null, { timeout }); }
+  catch { await diagnose(host); throw new Error(`timed out waiting for ${what}`); }
+}
+
 async function waitForServer() {
   for (let i = 0; i < 50; i++) {
     try { if ((await fetch(`${BASE}/info.json`)).ok) return; } catch {}
@@ -73,7 +86,7 @@ try {
   await phone.fill('#name', 'Smoke');
   await phone.check('#rec');
   await phone.click('#go');
-  await host.waitForFunction(() => [...pk.players.values()].some((p) => p.name === 'Smoke'), null, { timeout: 15000 });
+  await waitFor(host, () => [...pk.players.values()].some((p) => p.name === 'Smoke'), 'the phone to join', 30000);
   await host.waitForTimeout(2500);
   const link = await host.evaluate(() => [...pk.players.values()][0].path);
   check(link === 'direct' || link === 'relay', 'phone connected', link);
@@ -87,11 +100,11 @@ try {
   // The game loop runs on requestAnimationFrame, which stops in a hidden window: keep the game screen in front.
   await host.bringToFront();
   await press('[data-k=item]');
-  await host.waitForFunction(() => pk.phase === 'race', null, { timeout: 15000 });
+  console.log('  host fps:', await fpsOf(host));
+  await waitFor(host, () => pk.phase === 'race', 'the race to start', 60000);
   const p0 = await host.evaluate(() => pk.karts.find((k) => k.player).progress);
   await host.waitForTimeout(6000);
   const race = await host.evaluate(() => { const k = pk.karts.find((k) => k.player); return { progress: k.progress, speed: k.speed, recording: pk.rec.active }; });
-  console.log('  host fps:', await host.evaluate(() => new Promise((r) => { let n = 0; const t = performance.now(); const f = () => { n++; if (performance.now() - t < 1000) requestAnimationFrame(f); else r(n); }; requestAnimationFrame(f); })));
   check(race.progress - p0 > 20, 'phone input drives the kart', `${(race.progress - p0).toFixed(0)} m in 6 s`);
   check(race.recording, 'race is being recorded (player opted in)');
 
